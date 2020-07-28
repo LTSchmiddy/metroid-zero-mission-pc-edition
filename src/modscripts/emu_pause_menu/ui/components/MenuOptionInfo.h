@@ -100,6 +100,7 @@ struct ShownOptions {
 
 	struct ShownAudioOptions {
 		IntMenuOption volume = IntMenuOption("soundVolume");
+		BoolMenuOption surround = BoolMenuOption("GBSurround");
 
 	} audio;
 	

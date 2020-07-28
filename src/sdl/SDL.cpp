@@ -49,6 +49,7 @@
 
 #include "SDL.h"
 //#include "SDL_version.h"
+#include "icon.h"
 
 #include "../Util.h"
 #include "../common/ConfigManager.h"
@@ -1843,6 +1844,7 @@ int main(int argc, char** argv)
 
     sdlInitVideo();
 
+    //sdlSetWindowIcon(window);
     //filterFunction = initFilter(filter, systemColorDepth, sizeX);
     sdlSetFilter(filter);
 

@@ -15,6 +15,7 @@ vcpkg/*
 # MZE Directories:
 msbuild-debug/*
 msbuild-release/*
+msbuild-release-old/*
 out/*
 
 .vs/*

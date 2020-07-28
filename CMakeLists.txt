@@ -906,6 +906,14 @@ set(
     src/imgui/examples/imgui_impl_opengl2.cpp
 )
 
+set(
+    SDL_ICON_FILES
+    # Added by Alex icon files:
+    src/sdl/icon.h
+    src/sdl/icon.cpp
+    #
+)
+
 if(ENABLE_DEBUGGER)
     set(
         SRC_DEBUGGER
@@ -925,6 +933,7 @@ include_directories(
     ${PNG_INCLUDE_DIR}
     ${SDL2_INCLUDE_DIR}
     src
+    icon
     src/modscripts
     src/imgui
     src/imgui/examples
@@ -965,6 +974,7 @@ if(ENABLE_SDL)
         ${MOD_FILES}
         ${IMGUI_FILES}
         ${IMGUI_IMPL_FILES}
+        ${SDL_ICON_FILES}
     )
     set_property(TARGET Metroid_Zero_Mission_PC_Edition PROPERTY CXX_STANDARD 11)
     set_property(TARGET Metroid_Zero_Mission_PC_Edition PROPERTY CXX_STANDARD_REQUIRED ON)

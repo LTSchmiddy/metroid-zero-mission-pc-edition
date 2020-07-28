@@ -176,6 +176,8 @@ void OptionsMenu::DrawVideoSettings() {
 
 void OptionsMenu::DrawSoundSettings() {
 	ImGui::SliderInt("Volume", &menu_options.audio.volume.value, 0, get_sound_max_volume() * 100);
+	Checkbox("Use Surround Sound", &menu_options.audio.surround.value);
+
 	ResetSoundVolume(false);
 
 
