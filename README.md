@@ -1,3 +1,56 @@
+# Metroid: Zero Mission - PC Edition:
+This is project is an attempt to port 2004's "Metroid: Zero Mission" for the GameBoy Advance to modern PCs.
+This was done by integrating the original game data into the SDL2 version of VisualBoyAdvance-M, modifying both
+to add new features and more seamless experience.
+
+This readme is still a work in progress. Stay tuned.
+
+## Building instructions:
+I intended for this project to be run on a 64-bit architecture. I have no idea if you can build it for 32-bit.
+
+When generating your build folder from cmake, you need to use these cmake arguments as well:
+* __-DENABLE_WX=OFF__: We're not using the wxWidgets build of VBA-M. However, CMakeLists.txt has it ON by default.
+    For this project, however, adding it is a waste of compile-time, and will probably result in errors. 
+    
+* __-DENABLE_SDL=ON__: THIS is the version of VBA-M that the project uses. However, cmake won't generate it by default.
+    We need to tell it to do so manually.
+
+
+Generally, you should simply follow the building instructions in the original VBA-M readme (below), but there are a few specific notes:
+
+### Windows:
+If building on Windows (for Windows), you're going to use <a href="#Visual Studio Support">Visual Studio Support</a>,
+discussed below in the original readme, but with the additional CMake arguments from above.
+
+Overall, the build commands for Windows (Visual Studio) will look something like this:
+
+```
+mkdir build
+cd build
+cmake .. -DVCPKG_TARGET_TRIPLET=x64-windows -DENABLE_WX=OFF -DENABLE_SDL=ON
+msbuild -m -p:BuildInParallel=true -p:Configuration=Release .\ALL_BUILD.vcxproj 
+```
+
+The original instructions say that building the dependencies doesn't currently work in VS-2019, and that you'll
+have to do that part in VS-2017 instead. I didn't seem to have this problem, but maybe that's because I had some of
+them already built. Your milage may vary.
+
+
+Additionally, the contents of ./exec_assets/windows need to be copied into the same directory as the built executable
+in order for the program to run (I haven't gotten around to automating that yet). This folder includes a few additional
+required .dlls, the actual gamedata files, a copy of the basic config file, and a font asset.
+
+### Other Platforms:
+I can't think of anything in my code that would prevent VBA-M from compiling on other platforms, using the instructions
+from the original readme, but I haven't tried it. You're milage may vary.
+
+You will still need the gamedata files, config file, and font asset to go with the executable. You can find them in
+./exec_assets/other
+
+
+
+<hr/>
+## Original VBA-M Readme:
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 
