@@ -1,4 +1,5 @@
 #include "wx/joyedit.h"
+#include "wx/string.h"
 
 // FIXME: suppport analog/digital flag on per-axis basis
 

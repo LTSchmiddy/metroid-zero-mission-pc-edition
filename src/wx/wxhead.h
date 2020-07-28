@@ -63,7 +63,8 @@
 // GetAccel is inefficent anyway (often I don't want to convert to wxAccEnt)
 // This is a working replacement for SetAccel, at least.
 
-#include "wx/keyedit.h"
+//#include "wx/keyedit.h"
+#include "widgets/wx/keyedit.h"
 
 static inline void DoSetAccel(wxMenuItem* mi, wxAcceleratorEntry* acc)
 {

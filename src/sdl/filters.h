@@ -18,6 +18,8 @@
 
 #ifndef VBA_SDL_FILTERS_H
 #define VBA_SDL_FILTERS_H
+#define NUM_OF_FILTERS 23
+
 
 #include "../common/Types.h"
 #include "../System.h"
@@ -52,6 +54,7 @@ enum Filter {
     xbrz6x,
     kInvalidFilter
 };
+
 
 // Function pointer type for a filter function
 typedef void (*FilterFunc)(uint8_t*, uint32_t, uint8_t*, uint8_t*, uint32_t, int, int);

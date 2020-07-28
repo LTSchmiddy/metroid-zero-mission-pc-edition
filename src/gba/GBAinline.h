@@ -803,3 +803,4 @@ static inline void CPUWriteByte(uint32_t address, uint8_t b)
 }
 
 #endif // GBAINLINE_H
+

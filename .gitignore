@@ -1,3 +1,4 @@
+# VBA-M Directories
 src/wx/builtin-over.h
 src/wx/builtin-xrc.h
 src/wx/cmd-evtable.h
@@ -10,8 +11,13 @@ vsbuild/*
 cmake-build*
 dependencies/*
 vcpkg/*
+
+# MZE Directories:
+msbuild-debug/*
+msbuild-release/*
+out/*
+
 .vs/*
-.idea
 *.o
 *.so
 *.dll
@@ -23,3 +29,5 @@ vcpkg/*
 
 # mac finder crap
 *.DS_Store
+
+

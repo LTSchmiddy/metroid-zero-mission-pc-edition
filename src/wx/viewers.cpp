@@ -9,6 +9,7 @@
 #include "wxvbam.h"
 #include <wx/ffile.h>
 #include <wx/vlbox.h>
+#include "wx/string.h"
 
 // avoid exporting classes
 namespace Viewers {

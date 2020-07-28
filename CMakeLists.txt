@@ -889,6 +889,23 @@ set(
     src/gba/elf.h
 )
 
+file(GLOB_RECURSE MOD_FILES
+    src/modscripts/*
+)
+
+file(GLOB IMGUI_FILES
+    src/imgui/*.h
+    src/imgui/*.cpp
+)
+
+set(
+    IMGUI_IMPL_FILES
+    src/imgui/examples/imgui_impl_sdl.h
+    src/imgui/examples/imgui_impl_sdl.cpp
+    src/imgui/examples/imgui_impl_opengl2.h
+    src/imgui/examples/imgui_impl_opengl2.cpp
+)
+
 if(ENABLE_DEBUGGER)
     set(
         SRC_DEBUGGER
@@ -907,6 +924,10 @@ include_directories(
     fex
     ${PNG_INCLUDE_DIR}
     ${SDL2_INCLUDE_DIR}
+    src
+    src/modscripts
+    src/imgui
+    src/imgui/examples
 )
 
 if(ENABLE_FFMPEG)
@@ -937,13 +958,16 @@ set_property(TARGET vbamcore PROPERTY CXX_STANDARD_REQUIRED ON)
 
 if(ENABLE_SDL)
     add_executable(
-        vbam
+        Metroid_Zero_Mission_PC_Edition
         WIN32
         ${SRC_SDL}
         ${HDR_SDL}
+        ${MOD_FILES}
+        ${IMGUI_FILES}
+        ${IMGUI_IMPL_FILES}
     )
-    set_property(TARGET vbam PROPERTY CXX_STANDARD 11)
-    set_property(TARGET vbam PROPERTY CXX_STANDARD_REQUIRED ON)
+    set_property(TARGET Metroid_Zero_Mission_PC_Edition PROPERTY CXX_STANDARD 11)
+    set_property(TARGET Metroid_Zero_Mission_PC_Edition PROPERTY CXX_STANDARD_REQUIRED ON)
 
     if(WIN32)
         set(WIN32_LIBRARIES wsock32 ws2_32)
@@ -954,7 +978,7 @@ if(ENABLE_SDL)
     endif()
 
     target_link_libraries(
-        vbam
+        Metroid_Zero_Mission_PC_Edition
         ${VBAMCORE_LIBS}
         ${WIN32_LIBRARIES}
         ${LIRC_CLIENT_LIBRARY}

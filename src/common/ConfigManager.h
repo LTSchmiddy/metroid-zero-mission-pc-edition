@@ -94,7 +94,8 @@ extern int openGL;
 extern int autoPatch;
 extern int optFlashSize;
 extern int optPrintUsage;
-extern int paused;
+extern bool paused;
+//extern int paused;
 extern int pauseWhenInactive;
 extern int recentFreeze;
 extern int renderedFrames;
@@ -166,19 +167,37 @@ extern const char *screenShotDir;
 extern const char *saveDir;
 extern const char *batteryDir;
 
+
+//extern dictionary* preferences;
+
 // Directory within homedir to use for default save location.
 #define DOT_DIR "visualboyadvance-m"
+
+float get_sound_max_volume();
 
 void SetHome(char *_arg0);
 void SaveConfigFile();
 void CloseConfig();
+
 uint32_t ReadPrefHex(const char *pref_key, int default_value);
 uint32_t ReadPrefHex(const char *pref_key);
 uint32_t ReadPref(const char *pref_key, int default_value);
 uint32_t ReadPref(const char *pref_key);
 const char *ReadPrefString(const char *pref_key, const char *default_value);
 const char *ReadPrefString(const char *pref_key);
-void LoadConfigFile(int argc, char **argv);
+
+//void WritePrefHex(const char* pref_key, int default_value);
+//void WritePrefHex(const char* pref_key);
+void WritePref(const char* pref_key, int value);
+void WritePrefString(const char* pref_key, const char* value);
+
+void ReloadConfigFile();
+void ReloadConfig();
+
+//void LoadConfigFile(int argc, char **argv);
+void LoadConfigFile();
 void LoadConfig();
 int ReadOpts(int argc, char **argv);
+
+
 #endif

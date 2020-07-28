@@ -6,6 +6,10 @@
 #include <wx/generic/prntdlgg.h>
 #include <wx/print.h>
 #include <wx/printdlg.h>
+#include "wx/string.h"
+
+#include "../modscripts/GameModHandler.h"
+//#include "../wx/GameModHandler.h"
 
 // These should probably be in vbamcore
 int systemVerbose;
@@ -354,6 +358,7 @@ int systemSaveUpdateCounter = SYSTEM_SAVE_NOT_UPDATED;
 
 void system10Frames(int rate)
 {
+//    GM_MainLoop();
     GameArea* panel = wxGetApp().frame->GetPanel();
     int fs = frameSkip;
 

@@ -1,3 +1,4 @@
+#pragma once
 #ifndef WX_WXVBAM_H
 #define WX_WXVBAM_H
 
@@ -11,10 +12,14 @@
 #include <wx/propdlg.h>
 #include <wx/datetime.h>
 
-#include "wx/joyedit.h"
-#include "wx/keyedit.h"
-#include "wx/sdljoy.h"
-#include "wx/wxmisc.h"
+//#include "wx/joyedit.h"
+//#include "wx/keyedit.h"
+//#include "wx/sdljoy.h"
+//#include "wx/wxmisc.h"
+#include "widgets/wx/joyedit.h"
+#include "widgets/wx/keyedit.h"
+#include "widgets/wx/sdljoy.h"
+#include "widgets/wx/wxmisc.h"
 #include "wxhead.h"
 #ifndef NO_FFMPEG
 #include "../common/ffmpeg.h"
@@ -31,6 +36,13 @@
 #include "../gba/GBALink.h"
 #include "../gba/Globals.h"
 #include "../gba/Sound.h"
+// ===============================================================================================
+// Mod Methods Are Stored Here:
+
+
+// ===============================================================================================
+// End of Mod Methods.
+
 
 // make wxLogDebug work on non-debug builds of Wx, and make it use the console
 // on Windows
@@ -379,7 +391,7 @@ private:
     // Load a named wxDialog from the XRC file
     wxDialog* LoadXRCropertySheetDialog(const char* name);
 
-#include "cmdhandlers.h"
+#include "../build/src/wx/cmdhandlers.h"
 };
 
 // helper class to add HiDPI awareness (mostly for Mac OS X)
@@ -813,3 +825,4 @@ extern int joypress[4], autofire, autohold;
 #include "filters.h"
 
 #endif /* WX_WXVBAM_H */
+//

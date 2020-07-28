@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <wx/display.h>
 #include "strutils.h"
+#include "wx/string.h"
 
 /*
        disableSfx(F) -> cpuDisableSfx

@@ -5,8 +5,13 @@
 // The value is the symbolic name of the key pressed
 // Supports manual clearing (bs), multiple keys in widget, automatic tab on key
 
-#include "wx/keyedit.h"
-#include "wx/sdljoy.h"
+//#include "wx/keyedit.h"
+//#include "wx/sdljoy.h"
+
+
+#include "keyedit.h"
+#include "sdljoy.h"
+#include "wx/string.h"
 
 typedef struct wxJoyKeyBinding {
     int key; // key code; listed first for easy static init

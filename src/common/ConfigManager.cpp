@@ -169,7 +169,8 @@ int dsoundDisableHardwareAcceleration;
 int filterHeight;
 int filterMagnification;
 int filterMT; // enable multi-threading for pixel filters
-int filter = kStretch2x;
+//int filter = kStretch2x;
+int filter = Filter::xbrz4x;
 int filterWidth;
 int frameSkip = 1;
 int frameskipadjust;
@@ -179,7 +180,7 @@ int fsForceChange;
 int fsFrequency;
 int fsHeight;
 int fsWidth;
-int fullScreen;
+int fullScreen = 0;
 int fullScreenStretch;
 int gdbBreakOnLoad;
 int gdbPort;
@@ -203,7 +204,8 @@ int movieRecording;
 int openGL;
 int optFlashSize;
 int optPrintUsage;
-int paused;
+bool paused;
+//int paused;
 int pauseWhenInactive = 0;
 int preparedCheats = 0;
 int recentFreeze;
@@ -276,6 +278,10 @@ void(*dbgOutput)(const char *, uint32_t) = debuggerOutput;
 char* homeDir = NULL;
 char* arg0 = NULL;
 
+
+float get_sound_max_volume() {
+	return SOUND_MAX_VOLUME;
+}
 
 struct option argOptions[] = {
 
@@ -479,7 +485,8 @@ void LoadConfig()
 	autoPatch = ReadPref("autoPatch", 1);
 	autoSaveLoadCheatList = ReadPref("autoSaveCheatList", 1);
 	aviRecordDir = ReadPrefString("aviRecordDir");
-	batteryDir = ReadPrefString("batteryDir");
+	//batteryDir = ReadPrefString("batteryDir");
+	batteryDir = ReadPrefString("batteryDir", "saves");
 	biosFileNameGB = ReadPrefString("biosFileGB");
 	biosFileNameGBA = ReadPrefString("biosFileGBA");
 	biosFileNameGBC = ReadPrefString("biosFileGBC");
@@ -525,7 +532,7 @@ void LoadConfig()
 	loadDotCodeFile = ReadPrefString("loadDotCodeFile");
 	maxScale = ReadPref("maxScale", 0);
 	movieRecordDir = ReadPrefString("movieRecordDir");
-	openGL = ReadPrefHex("openGL");
+	openGL = ReadPrefHex("openGL", 1);
 	optFlashSize = ReadPrefHex("flashSize");
 	pauseWhenInactive = ReadPref("pauseWhenInactive", 1);
 	recentFreeze = ReadPref("recentFreeze", 0);
@@ -556,8 +563,8 @@ void LoadConfig()
 	useBiosFileGBC = ReadPref("useBiosGBC", 0);
 	videoOption = ReadPref("video", 2); // VIDEO_3X = 2
 	vsync = ReadPref("vsync", false);
-	windowHeight = ReadPref("windowHeight", 0);
-	windowMaximized = ReadPref("windowMaximized", 0);
+	windowHeight = ReadPref("windowHeight", 800);
+	windowMaximized = ReadPref("windowMaximized", 600);
 	windowPositionX = ReadPref("windowX", -1);
 	windowPositionY = ReadPref("windowY", -1);
 	windowWidth = ReadPref("windowWidth", 0);
@@ -662,6 +669,7 @@ const char* FindConfigFile(const char *name)
 		return name;
 	}
 
+	/*
 	struct stat s;
 	std::string homeDirTmp = get_xdg_user_config_home() + DOT_DIR;
 	char *fullDir = (char *)homeDirTmp.c_str();
@@ -735,13 +743,15 @@ const char* FindConfigFile(const char *name)
 	}
 #endif // ! _WIN32
 	return 0;
+	*/
 }
 
 void LoadConfigFile()
 {
 	if (preferences == NULL)
 	{
-		const char* configFile = FindConfigFile("vbam.ini");
+		//const char* configFile = FindConfigFile("vbam.ini");
+		const char* configFile = "vbam.ini";
 		OpenPreferences(configFile);
 	}
 }
@@ -782,24 +792,51 @@ uint32_t ReadPrefHex(const char* pref_key, int default_value)
     ss << default_value;
     ss >> default_string;
     LoadConfigFile();
-    std::string pref = "preferences:";
-    pref.append(pref_key);
+
+	std::string pref;
+	std::string checkStr = std::string(pref_key);
+	if (checkStr.find(":") == std::string::npos) {
+		pref = "preferences:";
+		pref.append(pref_key);
+	}
+	else {
+		pref = checkStr;
+	}
+
     return fromHex(iniparser_getstring(preferences, pref.c_str(), default_string.c_str()));
 }
 
 uint32_t ReadPrefHex(const char* pref_key)
 {
 	LoadConfigFile();
-	std::string pref = "preferences:";
-	pref.append(pref_key);
+
+	std::string pref;
+	std::string checkStr = std::string(pref_key);
+	if (checkStr.find(":") == std::string::npos) {
+		pref = "preferences:";
+		pref.append(pref_key);
+	}
+	else {
+		pref = checkStr;
+	}
+
 	return fromHex(iniparser_getstring(preferences, pref.c_str(), 0));
 }
 
 uint32_t ReadPref(const char* pref_key, int default_value)
 {
 	LoadConfigFile();
-	std::string pref = "preferences:";
-	pref.append(pref_key);
+
+	std::string pref;
+	std::string checkStr = std::string(pref_key);
+	if (checkStr.find(":") == std::string::npos) {
+		pref = "preferences:";
+		pref.append(pref_key);
+	}
+	else {
+		pref = checkStr;
+	}
+
 	return iniparser_getint(preferences, pref.c_str(), default_value);
 }
 
@@ -811,8 +848,17 @@ uint32_t ReadPref(const char* pref_key)
 const char* ReadPrefString(const char* pref_key, const char* default_value)
 {
 	LoadConfigFile();
-	std::string pref = "preferences:";
-	pref.append(pref_key);
+
+	std::string pref;
+	std::string checkStr = std::string(pref_key);	
+	if (checkStr.find(":") == std::string::npos) {
+		pref = "preferences:";
+		pref.append(pref_key);
+	}
+	else {
+		pref = checkStr;
+	}
+
 	return iniparser_getstring(preferences, pref.c_str(), default_value);
 }
 
@@ -821,6 +867,108 @@ const char* ReadPrefString(const char* pref_key)
 	return ReadPrefString(pref_key, "");
 }
 
+/* Write Prefs ============================== */
+
+
+//void WritePrefHex(const char* pref_key, int default_value)
+//{
+//	std::stringstream ss;
+//	std::string default_string;
+//	ss.setf(std::ios::hex | std::ios::showbase, std::ios::basefield);
+//	ss << default_value;
+//	ss >> default_string;
+//	LoadConfigFile();
+//
+//	std::string pref;
+//	std::string checkStr = std::string(pref_key);
+//	if (checkStr.find(":") == std::string::npos) {
+//		pref = "preferences:";
+//		pref.append(pref_key);
+//	}
+//	else {
+//		pref = checkStr;
+//	}
+//
+//	return fromHex(iniparser_getstring(preferences, pref.c_str(), default_string.c_str()));
+//}
+//
+//void WritePrefHex(const char* pref_key)
+//{
+//	//LoadConfigFile();
+//
+//	std::string pref;
+//	std::string checkStr = std::string(pref_key);
+//	if (checkStr.find(":") == std::string::npos) {
+//		pref = "preferences:";
+//		pref.append(pref_key);
+//	}
+//	else {
+//		pref = checkStr;
+//	}
+//
+//	return fromHex(iniparser_getstring(preferences, pref.c_str(), 0));
+//}
+
+void WritePref(const char* pref_key, int value)
+{
+	//LoadConfigFile();
+
+	std::string pref;
+	std::string checkStr = std::string(pref_key);
+	if (checkStr.find(":") == std::string::npos) {
+		pref = "preferences:";
+		pref.append(pref_key);
+	}
+	else {
+		pref = checkStr;
+	}
+
+	iniparser_set(preferences, pref.c_str(), std::to_string(value).c_str());
+}
+
+//void WritePref(const char* pref_key)
+//{
+//	WritePref(pref_key, 0);
+//}
+
+void WritePrefString(const char* pref_key, const char* value)
+{
+	//LoadConfigFile();
+
+	std::string pref;
+	std::string checkStr = std::string(pref_key);
+	if (checkStr.find(":") == std::string::npos) {
+		pref = "preferences:";
+		pref.append(pref_key);
+	}
+	else {
+		pref = checkStr;
+	}
+
+	iniparser_set(preferences, pref.c_str(), value);
+}
+
+//void WritePrefString(const char* pref_key)
+//{
+//	WritePrefString(pref_key, "");
+//}
+
+
+void ReloadConfigFile() {
+	CloseConfig();
+	//delete preferences;
+	LoadConfigFile();
+}
+
+void ReloadConfig() {
+	CloseConfig();
+	//delete preferences;
+
+	//LoadConfigFile();
+	LoadConfig();
+}
+
+/* ========================================== */
 /*-------------------------------------------------------------------------*/
 /**
   @brief    Duplicate a string
@@ -1363,4 +1511,6 @@ int ReadOpts(int argc, char ** argv)
 	}
 	return op;
 }
+
+
 

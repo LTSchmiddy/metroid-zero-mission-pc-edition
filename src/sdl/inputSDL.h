@@ -21,20 +21,20 @@
 #include "SDL.h"
 
 enum EKey {
-    KEY_LEFT,
-    KEY_RIGHT,
-    KEY_UP,
-    KEY_DOWN,
-    KEY_BUTTON_A,
-    KEY_BUTTON_B,
-    KEY_BUTTON_START,
-    KEY_BUTTON_SELECT,
-    KEY_BUTTON_L,
-    KEY_BUTTON_R,
-    KEY_BUTTON_SPEED,
-    KEY_BUTTON_CAPTURE,
-    KEY_BUTTON_AUTO_A,
-    KEY_BUTTON_AUTO_B
+    KEY_LEFT=0,
+    KEY_RIGHT=1,
+    KEY_UP=2,
+    KEY_DOWN=3,
+    KEY_BUTTON_A=4,
+    KEY_BUTTON_B=5,
+    KEY_BUTTON_START=6,
+    KEY_BUTTON_SELECT=7,
+    KEY_BUTTON_L=8,
+    KEY_BUTTON_R=9,
+    KEY_BUTTON_SPEED=10,
+    KEY_BUTTON_CAPTURE=11,
+    KEY_BUTTON_AUTO_A=12,
+    KEY_BUTTON_AUTO_B=13
 };
 
 enum EPad { PAD_MAIN,
@@ -43,6 +43,10 @@ enum EPad { PAD_MAIN,
     PAD_3,
     PAD_4,
     PAD_DEFAULT };
+
+
+extern bool sdlButtons[4][14];
+extern uint32_t joypad[5][14];
 
 /**
  * Init the joysticks needed by the keymap. Verify that the keymap is compatible
@@ -105,6 +109,8 @@ uint32_t inputGetEventCode(const SDL_Event& event);
  * @param which Emulated joypad index
  * @return Joypad state
  */
+
+bool inputReadJoypadButton(EPad pad, EKey key);
 uint32_t inputReadJoypad(int which);
 
 /**
@@ -135,5 +141,8 @@ void inputSetDefaultJoypad(EPad pad);
  * pad
  */
 EPad inputGetDefaultJoypad();
+
+
+void LoadInputConfig();
 
 #endif // VBAM_SDL_INPUT_H

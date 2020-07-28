@@ -21,6 +21,12 @@
 #include <wx/zipstrm.h>
 #include "wayland.h"
 #include "strutils.h"
+#include "wx/string.h"
+
+
+//#include "../modscripts/Mod_h"
+#include "../modscripts/GameModHandler.h"
+#include "../sdl/inputSDL.h"
 
 // The built-in xrc file
 #include "builtin-xrc.h"
@@ -31,6 +37,17 @@
 
 IMPLEMENT_APP(wxvbamApp)
 IMPLEMENT_DYNAMIC_CLASS(MainFrame, wxFrame)
+
+// ===============================================================================================
+// Mod Methods Are Stored Here:
+
+
+
+
+
+
+// ===============================================================================================
+// End of Mod Methods.
 
 // Initializer for struct cmditem
 cmditem new_cmditem(const wxString cmd, const wxString name, int cmd_id,
@@ -428,6 +445,13 @@ bool wxvbamApp::OnInit()
     if (isMaximized)
         frame->Maximize();
 
+    Mod_Init();
+
+    // Loads Default ROM:
+    if (wxGetApp().pending_load == wxEmptyString) {
+        wxGetApp().pending_load = Mod_romPath;
+    }
+
     if (isFullscreen && wxGetApp().pending_load != wxEmptyString)
 	frame->ShowFullScreen(isFullscreen);
     frame->Show(true);
@@ -444,7 +468,11 @@ int wxvbamApp::OnRun()
     }
     else
     {
-	return wxApp::OnRun();
+
+//        Mod_Logln("onRun");
+//        GM_MainLoop();
+
+	    return wxApp::OnRun();
     }
 }
 
@@ -789,6 +817,7 @@ void MainFrame::OnMove(wxMoveEvent& event)
 
 void MainFrame::OnSize(wxSizeEvent& event)
 {
+//    Mod_Log("On Moved");
     wxFrame::OnSize(event);
     wxRect pos = GetRect();
     wxPoint windowPos = GetScreenPosition();
@@ -821,6 +850,13 @@ void MainFrame::OnSize(wxSizeEvent& event)
 
 int MainFrame::FilterEvent(wxEvent& event)
 {
+
+//    Mod_HandleEvent(event);
+    //Mod_HandleEvent();
+
+	//Mod_HandleEvent(event, this);
+
+//    Mod_Logln("Event!");
     if (event.GetEventType() == wxEVT_KEY_DOWN)
     {
         wxKeyEvent& ke = (wxKeyEvent&)event;
@@ -916,6 +952,8 @@ void MainFrame::SetRecentAccels()
 
 void MainFrame::update_state_ts(bool force)
 {
+
+    Mod_Logln("Update State TS");
     bool any_states = false;
 
     for (int i = 0; i < 10; i++) {

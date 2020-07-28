@@ -28,6 +28,9 @@
 #include "elf.h"
 #include "ereader.h"
 
+//#include "../modscripts/GameModHandler.h"
+//#include "../wx/GameModHandler.h"
+
 #ifdef PROFILING
 #include "prof/prof.h"
 #endif
@@ -120,7 +123,7 @@ bool windowOn = false;
 int frameCount = 0;
 char buffer[1024];
 uint32_t lastTime = 0;
-int count = 0;
+int gbaCount = 0;
 
 int capture = 0;
 int capturePrevious = 0;
@@ -475,6 +478,7 @@ void cpuEnableProfiling(int hz)
 
 inline int CPUUpdateTicks()
 {
+
     int cpuLoopTicks = lcdTicks;
 
     //if (soundTicks < cpuLoopTicks)
@@ -2399,12 +2403,12 @@ void CPUCheckDMA(int reason, int dmamask)
             }
 #ifdef GBA_LOGGING
             if (systemVerbose & VERBOSE_DMA0) {
-                int count = (DM0CNT_L ? DM0CNT_L : 0x4000) << 1;
+                int gbaCount = (DM0CNT_L ? DM0CNT_L : 0x4000) << 1;
                 if (DM0CNT_H & 0x0400)
-                    count <<= 1;
-                log("DMA0: s=%08x d=%08x c=%04x count=%08x\n", dma0Source, dma0Dest,
+                    gbaCount <<= 1;
+                log("DMA0: s=%08x d=%08x c=%04x gbaCount=%08x\n", dma0Source, dma0Dest,
                     DM0CNT_H,
-                    count);
+                    gbaCount);
             }
 #endif
             doDMA(dma0Source, dma0Dest, sourceIncrement, destIncrement,
@@ -2456,7 +2460,7 @@ void CPUCheckDMA(int reason, int dmamask)
             if (reason == 3) {
 #ifdef GBA_LOGGING
                 if (systemVerbose & VERBOSE_DMA1) {
-                    log("DMA1: s=%08x d=%08x c=%04x count=%08x\n", dma1Source, dma1Dest,
+                    log("DMA1: s=%08x d=%08x c=%04x gbaCount=%08x\n", dma1Source, dma1Dest,
                         DM1CNT_H,
                         16);
                 }
@@ -2466,12 +2470,12 @@ void CPUCheckDMA(int reason, int dmamask)
             } else {
 #ifdef GBA_LOGGING
                 if (systemVerbose & VERBOSE_DMA1) {
-                    int count = (DM1CNT_L ? DM1CNT_L : 0x4000) << 1;
+                    int gbaCount = (DM1CNT_L ? DM1CNT_L : 0x4000) << 1;
                     if (DM1CNT_H & 0x0400)
-                        count <<= 1;
-                    log("DMA1: s=%08x d=%08x c=%04x count=%08x\n", dma1Source, dma1Dest,
+                        gbaCount <<= 1;
+                    log("DMA1: s=%08x d=%08x c=%04x gbaCount=%08x\n", dma1Source, dma1Dest,
                         DM1CNT_H,
-                        count);
+                        gbaCount);
                 }
 #endif
                 doDMA(dma1Source, dma1Dest, sourceIncrement, destIncrement,
@@ -2524,10 +2528,10 @@ void CPUCheckDMA(int reason, int dmamask)
             if (reason == 3) {
 #ifdef GBA_LOGGING
                 if (systemVerbose & VERBOSE_DMA2) {
-                    int count = (4) << 2;
-                    log("DMA2: s=%08x d=%08x c=%04x count=%08x\n", dma2Source, dma2Dest,
+                    int gbaCount = (4) << 2;
+                    log("DMA2: s=%08x d=%08x c=%04x gbaCount=%08x\n", dma2Source, dma2Dest,
                         DM2CNT_H,
-                        count);
+                        gbaCount);
                 }
 #endif
                 doDMA(dma2Source, dma2Dest, sourceIncrement, 0, 4,
@@ -2535,12 +2539,12 @@ void CPUCheckDMA(int reason, int dmamask)
             } else {
 #ifdef GBA_LOGGING
                 if (systemVerbose & VERBOSE_DMA2) {
-                    int count = (DM2CNT_L ? DM2CNT_L : 0x4000) << 1;
+                    int gbaCount = (DM2CNT_L ? DM2CNT_L : 0x4000) << 1;
                     if (DM2CNT_H & 0x0400)
-                        count <<= 1;
-                    log("DMA2: s=%08x d=%08x c=%04x count=%08x\n", dma2Source, dma2Dest,
+                        gbaCount <<= 1;
+                    log("DMA2: s=%08x d=%08x c=%04x gbaCount=%08x\n", dma2Source, dma2Dest,
                         DM2CNT_H,
-                        count);
+                        gbaCount);
                 }
 #endif
                 doDMA(dma2Source, dma2Dest, sourceIncrement, destIncrement,
@@ -2592,12 +2596,12 @@ void CPUCheckDMA(int reason, int dmamask)
             }
 #ifdef GBA_LOGGING
             if (systemVerbose & VERBOSE_DMA3) {
-                int count = (DM3CNT_L ? DM3CNT_L : 0x10000) << 1;
+                int gbaCount = (DM3CNT_L ? DM3CNT_L : 0x10000) << 1;
                 if (DM3CNT_H & 0x0400)
-                    count <<= 1;
-                log("DMA3: s=%08x d=%08x c=%04x count=%08x\n", dma3Source, dma3Dest,
+                    gbaCount <<= 1;
+                log("DMA3: s=%08x d=%08x c=%04x gbaCount=%08x\n", dma3Source, dma3Dest,
                     DM3CNT_H,
-                    count);
+                    gbaCount);
             }
 #endif
             doDMA(dma3Source, dma3Dest, sourceIncrement, destIncrement,
@@ -3168,7 +3172,7 @@ void applyTimer()
     if (timerOnOffDelay & 1) {
         timer0ClockReload = TIMER_TICKS[timer0Value & 3];
         if (!timer0On && (timer0Value & 0x80)) {
-            // reload the counter
+            // reload the gbaCounter
             TM0D = timer0Reload;
             timer0Ticks = (0x10000 - TM0D) << timer0ClockReload;
             UPDATE_REG(0x100, TM0D);
@@ -3182,7 +3186,7 @@ void applyTimer()
     if (timerOnOffDelay & 2) {
         timer1ClockReload = TIMER_TICKS[timer1Value & 3];
         if (!timer1On && (timer1Value & 0x80)) {
-            // reload the counter
+            // reload the gbaCounter
             TM1D = timer1Reload;
             timer1Ticks = (0x10000 - TM1D) << timer1ClockReload;
             UPDATE_REG(0x104, TM1D);
@@ -3195,7 +3199,7 @@ void applyTimer()
     if (timerOnOffDelay & 4) {
         timer2ClockReload = TIMER_TICKS[timer2Value & 3];
         if (!timer2On && (timer2Value & 0x80)) {
-            // reload the counter
+            // reload the gbaCounter
             TM2D = timer2Reload;
             timer2Ticks = (0x10000 - TM2D) << timer2ClockReload;
             UPDATE_REG(0x108, TM2D);
@@ -3207,7 +3211,7 @@ void applyTimer()
     if (timerOnOffDelay & 8) {
         timer3ClockReload = TIMER_TICKS[timer3Value & 3];
         if (!timer3On && (timer3Value & 0x80)) {
-            // reload the counter
+            // reload the gbaCounter
             TM3D = timer3Reload;
             timer3Ticks = (0x10000 - TM3D) << timer3ClockReload;
             UPDATE_REG(0x10C, TM3D);
@@ -3261,12 +3265,12 @@ void CPUInit(const char* biosFileName, bool useBiosFile)
     biosProtected[3] = 0xe1;
 
     for (i = 0; i < 256; i++) {
-        int count = 0;
+        int gbaCount = 0;
         int j;
         for (j = 0; j < 8; j++)
             if (i & (1 << j))
-                count++;
-        cpuBitsSet[i] = count;
+                gbaCount++;
+        cpuBitsSet[i] = gbaCount;
 
         for (j = 0; j < 8; j++)
             if (i & (1 << j))
@@ -3672,6 +3676,8 @@ void CPULoop(int ticks)
 //cpuNextEvent = 1;
 #endif
 
+
+
     cpuBreakLoop = false;
     cpuNextEvent = CPUUpdateTicks();
     if (cpuNextEvent > ticks)
@@ -3794,13 +3800,13 @@ void CPULoop(int ticks)
                         lcdTicks += 1008;
                         DISPSTAT &= 0xFFFD;
                         if (VCOUNT == 160) {
-                            count++;
+                            gbaCount++;
                             systemFrame();
 
-                            if ((count % 10) == 0) {
+                            if ((gbaCount % 10) == 0) {
                                 system10Frames(60);
                             }
-                            if (count == 60) {
+                            if (gbaCount == 60) {
                                 uint32_t time = systemGetClock();
                                 if (time != lastTime) {
                                     uint32_t t = 100000 / (time - lastTime);
@@ -3808,7 +3814,7 @@ void CPULoop(int ticks)
                                 } else
                                     systemShowSpeed(0);
                                 lastTime = time;
-                                count = 0;
+                                gbaCount = 0;
                             }
 
                             uint32_t ext = (joy >> 10);

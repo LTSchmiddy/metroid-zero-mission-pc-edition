@@ -1,3 +1,5 @@
+#include "Globals.h"
+
 #ifndef GBACPU_H
 #define GBACPU_H
 

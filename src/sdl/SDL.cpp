@@ -41,9 +41,14 @@
 
 #include <time.h>
 
+//#include "..//version.h"
+#include "../msbuild-release/version.h"
 #include "version.h"
 
+
+
 #include "SDL.h"
+//#include "SDL_version.h"
 
 #include "../Util.h"
 #include "../common/ConfigManager.h"
@@ -63,6 +68,9 @@
 #include "filters.h"
 #include "inputSDL.h"
 #include "text.h"
+
+#include "../modscripts/GameModHandler.h"
+#include "../modscripts/emu_pause_menu/OverlayMenu_Main.h"
 
 // from: https://stackoverflow.com/questions/7608714/why-is-my-pointer-not-null-after-free
 #define freeSafe(ptr) free(ptr); ptr = NULL;
@@ -126,11 +134,63 @@ struct EmulatedSystem emulator = {
     0
 };
 
+struct GLfloatCoords {
+    GLfloat x;
+    GLfloat y;
+
+    string string_rep() {
+        return string("(" + to_string(x) + "," + to_string(y) + ")");
+    }
+};
+
+struct GLfloatRect {
+    GLfloatCoords top_left;
+    GLfloatCoords top_right;
+    GLfloatCoords bottom_left;
+    GLfloatCoords bottom_right;
+
+    string string_rep() {
+        return string(
+            "top_left=" + top_left.string_rep() +
+            ",top_right = " + top_right.string_rep() +
+            ",bottom_left=" + bottom_left.string_rep() +
+            ",bottom_right=" + bottom_right.string_rep()
+        );
+    }
+
+} glRect;
+
+
+struct GLViewportParams {
+    GLint x;
+    GLint y;
+    GLsizei w;
+    GLsizei h;
+    
+
+    string string_rep() {
+        return string(
+            "x=" + to_string(x) +
+            ",y=" + to_string(y) +
+            ",w=" + to_string(w) +
+            ",h=" + to_string(h)
+        );
+    }
+
+    void set() {
+        glViewport(x, y, w, h);
+    }
+
+} glViewportParams;
+
 SDL_Surface* surface = NULL;
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
 SDL_Texture* texture = NULL;
 SDL_GLContext glcontext;
+
+int window_size_x;
+int window_size_y;
 
 int systemSpeed = 0;
 int systemRedShift = 0;
@@ -219,6 +279,8 @@ char* home;
 char homeConfigDir[1024];
 char homeDataDir[1024];
 
+char* gameDataFile;
+
 char screenMessageBuffer[21];
 uint32_t screenMessageTime = 0;
 
@@ -300,6 +362,9 @@ void StopLirc(void)
 
 bool sdlCheckDirectory(const char* dir)
 {
+	Mod_Log("Looking for directory: ");
+	Mod_Logln(dir);
+
     struct stat buf;
 
     if (!dir || !dir[0])
@@ -310,6 +375,8 @@ bool sdlCheckDirectory(const char* dir)
 	if (!(buf.st_mode & S_IFDIR))
 	{
 	    fprintf(stderr, "Error: %s is not a directory\n", dir);
+	    Mod_Log("Error - Not a directory: ");
+	    Mod_Logln(dir);
 	    return false;
 	}
 	return true;
@@ -317,6 +384,9 @@ bool sdlCheckDirectory(const char* dir)
     else
     {
 	fprintf(stderr, "Error: %s does not exist\n", dir);
+
+	Mod_Log("Error - Directory does not exist: ");
+	Mod_Logln(dir);
 	return false;
     }
 }
@@ -343,6 +413,11 @@ char* sdlGetFilePath(char* name)
     return strdup(path);
 }
 
+//char* sdlGetSaveFilePath(char* name)
+//{
+//    return "./saves/";
+//}
+
 FILE* sdlFindFile(const char* name)
 {
     char buffer[4096];
@@ -351,7 +426,7 @@ FILE* sdlFindFile(const char* name)
 #ifdef _WIN32
 #define PATH_SEP ";"
 #define FILE_SEP '\\'
-#define EXE_NAME "vbam.exe"
+#define EXE_NAME "Metroid Zero Mission - PC Edition.exe"
 #else // ! _WIN32
 #define PATH_SEP ":"
 #define FILE_SEP '/'
@@ -442,20 +517,31 @@ FILE* sdlFindFile(const char* name)
     return NULL;
 }
 
+
+
 static void sdlOpenGLScaleWithAspect(int w, int h)
 {
+    //systemScreenMessage(string(to_string(w) + ", " + to_string(h)).c_str());
+
     float screenAspect = (float)sizeX / sizeY,
           windowAspect = (float)w / h;
 
+
     if (windowAspect == screenAspect)
-        glViewport(0, 0, w, h);
+        //glViewport(0, 0, w, h);
+        glViewportParams = { 0, 0, w, h };
     else if (windowAspect < screenAspect) {
         int height = (int)(w / screenAspect);
-        glViewport(0, (h - height) / 2, w, height);
+        glViewportParams = { 0, (h - height) / 2, w, height };
     } else {
         int width = (int)(h * screenAspect);
-        glViewport((w - width) / 2, 0, width, h);
+        glViewportParams = { (w - width) / 2, 0, width, h };
     }
+
+    //systemScreenMessage(glViewportParams.string_rep().c_str());
+    glViewportParams.set();
+
+    /*systemScreenMessage("ScaleWithAspect ran...");*/
 }
 
 static void sdlOpenGLVideoResize()
@@ -487,7 +573,13 @@ static void sdlOpenGLVideoResize()
 
     glClear(GL_COLOR_BUFFER_BIT);
 
-    sdlOpenGLScaleWithAspect(destWidth, destHeight);
+    //sdlOpenGLScaleWithAspect(destWidth, destHeight);
+
+    //int window_x;
+    //int window_y;
+
+    //SDL_GetWindowSize(window, &window_x, &window_y);
+    sdlOpenGLScaleWithAspect(window_size_x, window_size_y);
 }
 
 void sdlOpenGLInit(int w, int h)
@@ -774,9 +866,10 @@ void sdlWriteBattery()
 
     bool result = emulator.emuWriteBattery(buffer);
 
+    //systemScreenMessage(gameFile);
     if (result)
-	systemMessage(0, "Wrote battery '%s'", buffer);
-
+	    systemMessage(0, "Wrote battery '%s'", buffer);
+    
     freeSafe(gameFile);
     freeSafe(gameDir);
 }
@@ -784,6 +877,7 @@ void sdlWriteBattery()
 void sdlReadBattery()
 {
     char buffer[2048];
+    //char *gameDir = sdlGetFilePath(filename);
     char *gameDir = sdlGetFilePath(filename);
     char *gameFile = sdlGetFilename(filename);
 
@@ -796,6 +890,7 @@ void sdlReadBattery()
 
     bool result = emulator.emuReadBattery(buffer);
 
+    //systemScreenMessage(gameFile);
     if (result)
         systemMessage(0, "Loaded battery '%s'", buffer);
 
@@ -811,8 +906,22 @@ void sdlReadDesktopVideoMode()
     desktopHeight = dm.h;
 }
 
+void sdlSetFullScreen(bool enabled) {
+    fullScreen = enabled;
+    SDL_SetWindowFullscreen(window, fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+    if (openGL) {
+        if (fullScreen)
+            sdlOpenGLScaleWithAspect(desktopWidth, desktopHeight);
+        else
+            sdlOpenGLScaleWithAspect(destWidth, destHeight);
+    }
+}
+
 static void sdlResizeVideo()
 {
+    //Line added by ALex. Keeps track of current video size.
+    SDL_GetWindowSize(window, &window_size_x, &window_size_y);
+
     filter_enlarge = getFilterEnlargeFactor(filter);
 
     destWidth = filter_enlarge * sizeX;
@@ -845,6 +954,24 @@ static void sdlResizeVideo()
     }
 }
 
+void sdlSetFilter(int set_filter, bool do_window_update) {
+    filter = set_filter;
+    filterFunction = initFilter(filter, systemColorDepth, sizeX);
+
+    if (do_window_update) {
+        //if (getFilterEnlargeFactor(filter) != filter_enlarge) {
+
+            /*if (!fullScreen)
+                SDL_SetWindowSize(window, destWidth, destHeight);*/
+        //}
+        should_video_resize.should = true;
+    }
+}
+void sdlSetFilter(int set_filter) {
+    sdlSetFilter(set_filter, true);
+}
+
+
 void sdlInitVideo()
 {
     int flags;
@@ -853,14 +980,21 @@ void sdlInitVideo()
 
     filter_enlarge = getFilterEnlargeFactor(filter);
 
-    destWidth = filter_enlarge * sizeX;
-    destHeight = filter_enlarge * sizeY;
+	destWidth = filter_enlarge * sizeX; // *2;
+	destHeight = filter_enlarge * sizeY; // *2;
+
+	//fullScreen = true;
+	//openGL = true;
+
+	//gameModHandler.Logln(openGL);
 
     flags = fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0;
     if (openGL) {
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-        flags |= SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+        flags |= SDL_WINDOW_OPENGL;
     }
+
+	flags |= SDL_WINDOW_RESIZABLE;
 
     screenWidth = destWidth;
     screenHeight = destHeight;
@@ -869,8 +1003,10 @@ void sdlInitVideo()
         SDL_DestroyWindow(window);
     if (renderer)
         SDL_DestroyRenderer(renderer);
-    window = SDL_CreateWindow("VBA-M", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        screenWidth, screenHeight, flags);
+    //window = SDL_CreateWindow(Mod_windowName, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, flags);
+    window = SDL_CreateWindow(Mod_windowName, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screenWidth, screenHeight, flags);
+    //window = SDL_CreateWindow("VBA-M", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screenWidth, screenHeight, flags);
+    //window = SDL_CreateWindow("VBA-M", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screenWidth, screenHeight, SDL_WINDOW_RESIZABLE);
     if (!openGL) {
         renderer = SDL_CreateRenderer(window, -1, 0);
     }
@@ -1120,9 +1256,10 @@ void sdlPollEvents()
 {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+		Mod_handleSDLEvent(event);
         switch (event.type) {
         case SDL_QUIT:
-            emulating = 0;
+            emulating = 0; 
             break;
 #if 0
     case SDL_VIDEORESIZE:
@@ -1161,29 +1298,36 @@ void sdlPollEvents()
 #endif
         case SDL_WINDOWEVENT:
             switch (event.window.event) {
-            case SDL_WINDOWEVENT_FOCUS_GAINED:
-                if (pauseWhenInactive)
-                    if (paused) {
-                        if (emulating) {
-                            paused = 0;
-                            soundResume();
-                        }
-                    }
-                break;
+            //case SDL_WINDOWEVENT_FOCUS_GAINED:
+            //    if (pauseWhenInactive)
+            //        if (paused) {
+            //            if (emulating) {
+            //                paused = 0;
+            //                soundResume();
+            //            }
+            //        }
+            //    break;
             case SDL_WINDOWEVENT_FOCUS_LOST:
                 if (pauseWhenInactive) {
-                    wasPaused = true;
-                    if (emulating) {
-                        paused = 1;
-                        soundPause();
-                    }
+                    //wasPaused = true;
+                    //if (emulating) {
+                    //    paused = 1;
+                    //    soundPause();
+                    //}
 
-                    memset(delta, 255, delta_size);
+                    //memset(delta, 255, delta_size);
+
+
+                    PauseMenu_OnFocusLost();
+                    
                 }
                 break;
             case SDL_WINDOWEVENT_RESIZED:
                 if (openGL)
-                    sdlOpenGLScaleWithAspect(event.window.data1, event.window.data2);
+                    //sdlOpenGLVideoResize();
+                    sdlResizeVideo();
+                    //sdlOpenGLScaleWithAspect(event.window.data1, event.window.data2);
+
                 break;
             }
             break;
@@ -1201,58 +1345,60 @@ void sdlPollEvents()
         case SDL_JOYAXISMOTION:
         case SDL_KEYDOWN:
             inputProcessSDLEvent(event);
+			//Mod_Logln("key down");
             break;
         case SDL_KEYUP:
+			inputProcessSDLEvent(event);
             switch (event.key.keysym.sym) {
-            case SDLK_r:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
-                    if (emulating) {
-                        emulator.emuReset();
+            //case SDLK_r:
+            //    if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
+            //        if (emulating) {
+                        //emulator.emuReset();
 
-                        systemScreenMessage("Reset");
-                    }
-                }
-                break;
-            case SDLK_b:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL))
-                    change_rewind(-1);
-                break;
-            case SDLK_v:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL))
-                    change_rewind(+1);
-                break;
-            case SDLK_h:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL))
-                    change_rewind(0);
-                break;
-            case SDLK_j:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL))
-                    change_rewind((rewindTopPos - rewindPos) * ((rewindTopPos > rewindPos) ? +1 : -1));
-                break;
-            case SDLK_e:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
-                    cheatsEnabled = !cheatsEnabled;
-                    systemConsoleMessage(cheatsEnabled ? "Cheats on" : "Cheats off");
-                }
-                break;
+            //            systemScreenMessage("Reset");
+            //        }
+            //    }
+            //    break;
+            //case SDLK_b:
+            //    if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL))
+            //        change_rewind(-1);
+            //    break;
+            //case SDLK_v:
+            //    if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL))
+            //        change_rewind(+1);
+            //    break;
+            //case SDLK_h:
+            //    if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL))
+            //        change_rewind(0);
+            //    break;
+            //case SDLK_j:
+            //    if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL))
+            //        change_rewind((rewindTopPos - rewindPos) * ((rewindTopPos > rewindPos) ? +1 : -1));
+            //    break;
+            //case SDLK_e:
+            //    if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
+            //        cheatsEnabled = !cheatsEnabled;
+            //        systemConsoleMessage(cheatsEnabled ? "Cheats on" : "Cheats off");
+            //    }
+            //    break;
 
-            case SDLK_s:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
-                    if (sdlSoundToggledOff) { // was off
-                        // restore saved state
-                        soundSetEnable(sdlSoundToggledOff);
-                        sdlSoundToggledOff = 0;
-                        systemConsoleMessage("Sound toggled on");
-                    } else { // was on
-                        sdlSoundToggledOff = soundGetEnable();
-                        soundSetEnable(0);
-                        systemConsoleMessage("Sound toggled off");
-                        if (!sdlSoundToggledOff) {
-                            sdlSoundToggledOff = 0x3ff;
-                        }
-                    }
-                }
-                break;
+            //case SDLK_s:
+            //    if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
+            //        if (sdlSoundToggledOff) { // was off
+            //            // restore saved state
+            //            soundSetEnable(sdlSoundToggledOff);
+            //            sdlSoundToggledOff = 0;
+            //            systemConsoleMessage("Sound toggled on");
+            //        } else { // was on
+            //            sdlSoundToggledOff = soundGetEnable();
+            //            soundSetEnable(0);
+            //            systemConsoleMessage("Sound toggled off");
+            //            if (!sdlSoundToggledOff) {
+            //                sdlSoundToggledOff = 0x3ff;
+            //            }
+            //        }
+            //    }
+            //    break;
             case SDLK_KP_DIVIDE:
                 sdlChangeVolume(-0.1);
                 break;
@@ -1299,40 +1445,54 @@ void sdlPollEvents()
                 }
                 break;
 
-            case SDLK_p:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
-                    paused = !paused;
-                    if (paused)
-                        soundPause();
-                    else
-                        soundResume();
-                    if (paused)
-                        wasPaused = true;
-                    systemConsoleMessage(paused ? "Pause on" : "Pause off");
-                }
-                break;
+            //case SDLK_p:
+            //    if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
+            //        paused = !paused;
+            //        if (paused)
+            //            soundPause();
+            //        else
+            //            soundResume();
+            //        if (paused)
+            //            wasPaused = true;
+            //        systemConsoleMessage(paused ? "Pause on" : "Pause off");
+            //    }
+            //    break;
             case SDLK_ESCAPE:
-                emulating = 0;
+                //emulating = 0;
+				PauseMenu_Toggle();
+				//paused = !paused;
+				//if (paused)
+				//	soundPause();
+				//else
+				//	soundResume();
+				//if (paused)
+				//	wasPaused = true;
+				//Mod_Logln("Pause Toggle");
                 break;
-            case SDLK_f:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
-                    fullScreen = !fullScreen;
-                    SDL_SetWindowFullscreen(window, fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
-                    if (openGL) {
-                        if (fullScreen)
-                            sdlOpenGLScaleWithAspect(desktopWidth, desktopHeight);
-                        else
-                            sdlOpenGLScaleWithAspect(destWidth, destHeight);
-                    }
+            case SDLK_HOME:
+            //case SDLK_f:
+				//Mod_Logln("Fullscreen Toggle");
+
+                //if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
+                    sdlSetFullScreen(!fullScreen);
+                    //SDL_SetWindowFullscreen(window, fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+                    //if (openGL) {
+                    //    if (fullScreen)
+                    //        sdlOpenGLScaleWithAspect(desktopWidth, desktopHeight);
+                    //    else
+                    //        sdlOpenGLScaleWithAspect(destWidth, destHeight);
+                    //}
                     //sdlInitVideo();
-                }
+                //}
                 break;
-            case SDLK_g:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
+            //case SDLK_g:
+            case SDLK_END:
+                //if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
                     filterFunction = 0;
                     while (!filterFunction) {
                         filter = (Filter)((filter + 1) % kInvalidFilter);
-                        filterFunction = initFilter(filter, systemColorDepth, sizeX);
+                        //filterFunction = initFilter(filter, systemColorDepth, sizeX);
+                        sdlSetFilter(filter, false);
                     }
                     if (getFilterEnlargeFactor(filter) != filter_enlarge) {
                         sdlResizeVideo();
@@ -1340,7 +1500,7 @@ void sdlPollEvents()
                             SDL_SetWindowSize(window, destWidth, destHeight);
                     }
                     systemScreenMessage(getFilterName(filter));
-                }
+                //}
                 break;
             case SDLK_F11:
                 if (armState) {
@@ -1366,6 +1526,13 @@ void sdlPollEvents()
                     sdlHandleSavestateKey(event.key.keysym.sym - SDLK_F1, 0); // without SHIFT
                 }
                 break;
+
+			//case SDLK_F5:
+			//	sdlHandleSavestateKey(0, 1);
+			//	break;
+			//case SDLK_F7:
+			//	sdlHandleSavestateKey(0, 0);
+			//	break;
             /* backups - only load */
             case SDLK_F9:
                 /* F9 is "load backup" - saved state from *just before* the last restore */
@@ -1427,17 +1594,48 @@ void sdlPollEvents()
                     layerEnable = DISPCNT & layerSettings;
                 }
                 break;
-            case SDLK_n:
-                if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
-                    if (paused)
-                        paused = false;
-                    pauseNextFrame = true;
-                }
+            case SDLK_9:
+                systemScreenMessage("Battery Read?");
+                sdlReadBattery();
+                break;
+            case SDLK_0:
+                systemScreenMessage("Battery Write?");
+                sdlWriteBattery();
+                break;
+                /* case SDLK_n:
+                    if (!(event.key.keysym.mod & MOD_NOCTRL) && (event.key.keysym.mod & KMOD_CTRL)) {
+                        if (paused)
+                            paused = false;
+                        pauseNextFrame = true;
+                    }
+                    break;*/
+            case SDLK_p:
+
+                //systemScreenMessage(string("sizeX=" + to_string(sizeX) + ", sizeY=" + to_string(sizeY)).c_str());
+                //systemScreenMessage(string("w=" + to_string(destWidth) + ", h=" + to_string(destHeight)).c_str());
+                systemScreenMessage(string("w=" + to_string(window_size_x) + ", h=" + to_string(window_size_y)).c_str());
+                sdlResizeVideo();
+                break;
+            case SDLK_INSERT:
+
+                systemScreenMessage(glRect.top_left.string_rep().c_str());
+                break;
+            case SDLK_DELETE:
+
+                systemScreenMessage(glRect.bottom_left.string_rep().c_str());
+                break;
+            case SDLK_PAGEUP:
+
+                systemScreenMessage(glRect.top_right.string_rep().c_str());
+                break;
+            case SDLK_PAGEDOWN:
+
+                systemScreenMessage(glRect.bottom_right.string_rep().c_str());
                 break;
             default:
                 break;
             }
-            inputProcessSDLEvent(event);
+            //inputProcessSDLEvent(event);
             break;
         }
     }
@@ -1656,25 +1854,83 @@ void handleRewinds()
 
 void SetHomeConfigDir()
 {
-    sprintf(homeConfigDir, "%s%s", get_xdg_user_config_home().c_str(), DOT_DIR);
+    //sprintf(homeConfigDir, "%s%s", get_xdg_user_config_home().c_str(), DOT_DIR);
+    sprintf(homeConfigDir, "%s%s", "./" , DOT_DIR);
     struct stat s;
-    if (stat(homeDataDir, &s) == -1 || !S_ISDIR(s.st_mode))
+	if (stat(homeDataDir, &s) == -1 || !S_ISDIR(s.st_mode))
+
+		Mod_Logln(homeConfigDir);
+    //systemScreenMessage(homeConfigDir);
 	mkdir(homeDataDir, 0755);
 }
 
 void SetHomeDataDir()
 {
-    sprintf(homeDataDir, "%s%s", get_xdg_user_data_home().c_str(), DOT_DIR);
+    //sprintf(homeDataDir, "%s%s", get_xdg_user_data_home().c_str(), DOT_DIR);
+    sprintf(homeDataDir, "%s%s", "./", DOT_DIR);
     struct stat s;
     if (stat(homeDataDir, &s) == -1 || !S_ISDIR(s.st_mode))
+		Mod_Logln(homeDataDir);
 	mkdir(homeDataDir, 0755);
 }
 
+
+bool sdlLoadGameData(char* filepath) {
+    int size = CPULoadRom(filepath);
+    bool failed = (size == 0);
+    if (!failed) {
+        if (cpuSaveType == 0)
+            utilGBAFindSave(size);
+        else
+            saveType = cpuSaveType;
+
+        sdlApplyPerImagePreferences();
+
+        doMirroring(mirroringEnable);
+
+        cartridgeType = 0;
+        emulator = GBASystem;
+
+        CPUInit(biosFileNameGBA, useBios);
+        int patchnum;
+        for (patchnum = 0; patchnum < patchNum; patchnum++) {
+            fprintf(stdout, "Trying patch %s%s\n", patchNames[patchnum],
+                applyPatch(patchNames[patchnum], &rom, &size) ? " [success]" : "[failure]");
+        }
+
+        // Applying Mod Patches:
+        if (Mod_betterEquipmentMenu) {
+            Mod_Log("Applying menu patch... ");
+            Mod_Logln(applyPatch(Mod_menuPatchPath, &rom, &size) ? " [success]" : "[failure]");
+        }
+
+        if (Mod_noHints) {
+            Mod_Log("Applying hints patch... ");
+            Mod_Logln(applyPatch(Mod_hintsPatchPath, &rom, &size) ? " [success]" : "[failure]");
+        }
+
+
+
+        CPUReset();
+    }
+
+    return failed;
+}
+
+bool sdlLoadGameData() { 
+    return sdlLoadGameData(gameDataFile);
+}
+
+
+// PROGRAM ENTRY POINT!!
 int main(int argc, char** argv)
 {
+
+
     fprintf(stdout, "%s\n", VBA_NAME_AND_SUBVERSION);
 
     home = argv[0];
+    //home = "./";
     SetHome(home);
     SetHomeConfigDir();
     SetHomeDataDir();
@@ -1689,69 +1945,15 @@ int main(int argc, char** argv)
     gb_effects_config.surround = false;
     gb_effects_config.enabled = false;
 
-    ReadOpts(argc, argv);
-    LoadConfig(); // Parse command line arguments (overrides ini)
 
-    inputSetKeymap(PAD_1, KEY_LEFT, ReadPrefHex("Joy0_Left"));
-    inputSetKeymap(PAD_1, KEY_RIGHT, ReadPrefHex("Joy0_Right"));
-    inputSetKeymap(PAD_1, KEY_UP, ReadPrefHex("Joy0_Up"));
-    inputSetKeymap(PAD_1, KEY_DOWN, ReadPrefHex("Joy0_Down"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_A, ReadPrefHex("Joy0_A"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_B, ReadPrefHex("Joy0_B"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_L, ReadPrefHex("Joy0_L"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_R, ReadPrefHex("Joy0_R"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_START, ReadPrefHex("Joy0_Start"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_SELECT, ReadPrefHex("Joy0_Select"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_SPEED, ReadPrefHex("Joy0_Speed"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_CAPTURE, ReadPrefHex("Joy0_Capture"));
-    inputSetKeymap(PAD_2, KEY_LEFT, ReadPrefHex("Joy1_Left"));
-    inputSetKeymap(PAD_2, KEY_RIGHT, ReadPrefHex("Joy1_Right"));
-    inputSetKeymap(PAD_2, KEY_UP, ReadPrefHex("Joy1_Up"));
-    inputSetKeymap(PAD_2, KEY_DOWN, ReadPrefHex("Joy1_Down"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_A, ReadPrefHex("Joy1_A"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_B, ReadPrefHex("Joy1_B"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_L, ReadPrefHex("Joy1_L"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_R, ReadPrefHex("Joy1_R"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_START, ReadPrefHex("Joy1_Start"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_SELECT, ReadPrefHex("Joy1_Select"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_SPEED, ReadPrefHex("Joy1_Speed"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_CAPTURE, ReadPrefHex("Joy1_Capture"));
-    inputSetKeymap(PAD_3, KEY_LEFT, ReadPrefHex("Joy2_Left"));
-    inputSetKeymap(PAD_3, KEY_RIGHT, ReadPrefHex("Joy2_Right"));
-    inputSetKeymap(PAD_3, KEY_UP, ReadPrefHex("Joy2_Up"));
-    inputSetKeymap(PAD_3, KEY_DOWN, ReadPrefHex("Joy2_Down"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_A, ReadPrefHex("Joy2_A"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_B, ReadPrefHex("Joy2_B"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_L, ReadPrefHex("Joy2_L"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_R, ReadPrefHex("Joy2_R"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_START, ReadPrefHex("Joy2_Start"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_SELECT, ReadPrefHex("Joy2_Select"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_SPEED, ReadPrefHex("Joy2_Speed"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_CAPTURE, ReadPrefHex("Joy2_Capture"));
-    inputSetKeymap(PAD_4, KEY_LEFT, ReadPrefHex("Joy3_Left"));
-    inputSetKeymap(PAD_4, KEY_RIGHT, ReadPrefHex("Joy3_Right"));
-    inputSetKeymap(PAD_4, KEY_UP, ReadPrefHex("Joy3_Up"));
-    inputSetKeymap(PAD_4, KEY_DOWN, ReadPrefHex("Joy3_Down"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_A, ReadPrefHex("Joy3_A"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_B, ReadPrefHex("Joy3_B"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_L, ReadPrefHex("Joy3_L"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_R, ReadPrefHex("Joy3_R"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_START, ReadPrefHex("Joy3_Start"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_SELECT, ReadPrefHex("Joy3_Select"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_SPEED, ReadPrefHex("Joy3_Speed"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_CAPTURE, ReadPrefHex("Joy3_Capture"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_AUTO_A, ReadPrefHex("Joy0_AutoA"));
-    inputSetKeymap(PAD_1, KEY_BUTTON_AUTO_B, ReadPrefHex("Joy0_AutoB"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_AUTO_A, ReadPrefHex("Joy1_AutoA"));
-    inputSetKeymap(PAD_2, KEY_BUTTON_AUTO_B, ReadPrefHex("Joy1_AutoB"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_AUTO_A, ReadPrefHex("Joy2_AutoA"));
-    inputSetKeymap(PAD_3, KEY_BUTTON_AUTO_B, ReadPrefHex("Joy2_AutoB"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_AUTO_A, ReadPrefHex("Joy3_AutoA"));
-    inputSetKeymap(PAD_4, KEY_BUTTON_AUTO_B, ReadPrefHex("Joy3_AutoB"));
-    inputSetMotionKeymap(KEY_LEFT, ReadPrefHex("Motion_Left"));
-    inputSetMotionKeymap(KEY_RIGHT, ReadPrefHex("Motion_Right"));
-    inputSetMotionKeymap(KEY_UP, ReadPrefHex("Motion_Up"));
-    inputSetMotionKeymap(KEY_DOWN, ReadPrefHex("Motion_Down"));
+    LoadConfig(); 
+	ReadOpts(argc, argv);// Parse command line arguments (overrides ini)
+
+	LoadInputConfig();
+	
+	Mod_LoadModSettings();
+    Mod_InitLog();
+
 
     if (!sdlCheckDirectory(screenShotDir))
         screenShotDir = NULL;
@@ -1760,7 +1962,8 @@ int main(int argc, char** argv)
     if (!sdlCheckDirectory(batteryDir))
         batteryDir = NULL;
 
-    sdlSaveKeysSwitch = (ReadPrefHex("saveKeysSwitch"));
+    //sdlSaveKeysSwitch = (ReadPrefHex("saveKeysSwitch"));
+    sdlSaveKeysSwitch = (ReadPref("saveKeysSwitch"), 2);
     sdlOpenglScale = (ReadPrefHex("openGLscale"));
 
     if (optPrintUsage) {
@@ -1768,128 +1971,115 @@ int main(int argc, char** argv)
         exit(-1);
     }
 
-    if (!debugger) {
-        if (optind >= argc) {
-            systemMessage(0, "Missing image name");
-            usage(argv[0]);
-            exit(-1);
-        }
+    //if (!debugger) {
+    //    if (optind >= argc) {
+    //        systemMessage(0, "Missing image name");
+    //        usage(argv[0]);
+    //        exit(-1);
+    //    }
+    //}
+
+	gameDataFile = Mod_romPath;
+
+	if (optind < argc) {
+		gameDataFile = argv[optind];
+	}
+
+	Mod_Logln(gameDataFile);
+	Mod_Logln(filename);
+
+    utilStripDoubleExtension(gameDataFile, filename);
+    char* p = strrchr(filename, '.');
+
+    if (p)
+        *p = 0;
+
+    if (autoPatch && patchNum == 0) {
+        char* tmp;
+        // no patch given yet - look for ROMBASENAME.ips
+        tmp = (char*)malloc(strlen(filename) + 4 + 1);
+        sprintf(tmp, "%s.ips", filename);
+        patchNames[patchNum] = tmp;
+        patchNum++;
+
+        // no patch given yet - look for ROMBASENAME.ups
+        tmp = (char*)malloc(strlen(filename) + 4 + 1);
+        sprintf(tmp, "%s.ups", filename);
+        patchNames[patchNum] = tmp;
+        patchNum++;
+
+        // no patch given yet - look for ROMBASENAME.ppf
+        tmp = (char*)malloc(strlen(filename) + 4 + 1);
+        sprintf(tmp, "%s.ppf", filename);
+        patchNames[patchNum] = tmp;
+        patchNum++;
     }
 
-    if (optind < argc) {
-        char* szFile = argv[optind];
+    soundInit();
 
-        utilStripDoubleExtension(szFile, filename);
-        char* p = strrchr(filename, '.');
+    bool failed = true;
 
-        if (p)
-            *p = 0;
+    IMAGE_TYPE type = utilFindType(gameDataFile);
 
-        if (autoPatch && patchNum == 0) {
-            char* tmp;
-            // no patch given yet - look for ROMBASENAME.ips
-            tmp = (char*)malloc(strlen(filename) + 4 + 1);
-            sprintf(tmp, "%s.ips", filename);
-            patchNames[patchNum] = tmp;
-            patchNum++;
-
-            // no patch given yet - look for ROMBASENAME.ups
-            tmp = (char*)malloc(strlen(filename) + 4 + 1);
-            sprintf(tmp, "%s.ups", filename);
-            patchNames[patchNum] = tmp;
-            patchNum++;
-
-            // no patch given yet - look for ROMBASENAME.ppf
-            tmp = (char*)malloc(strlen(filename) + 4 + 1);
-            sprintf(tmp, "%s.ppf", filename);
-            patchNames[patchNum] = tmp;
-            patchNum++;
-        }
-
-        soundInit();
-
-        bool failed = false;
-
-        IMAGE_TYPE type = utilFindType(szFile);
-
-        if (type == IMAGE_UNKNOWN) {
-            systemMessage(0, "Unknown file type %s", szFile);
-            exit(-1);
-        }
-        cartridgeType = (int)type;
-
-        if (type == IMAGE_GB) {
-            failed = !gbLoadRom(szFile);
-            if (!failed) {
-                gbGetHardwareType();
-
-                // used for the handling of the gb Boot Rom
-                if (gbHardware & 7)
-                    gbCPUInit(biosFileNameGB, useBios);
-
-                cartridgeType = IMAGE_GB;
-                emulator = GBSystem;
-                int size = gbRomSize, patchnum;
-                for (patchnum = 0; patchnum < patchNum; patchnum++) {
-                    fprintf(stdout, "Trying patch %s%s\n", patchNames[patchnum],
-                        applyPatch(patchNames[patchnum], &gbRom, &size) ? " [success]" : "");
-                }
-                if (size != gbRomSize) {
-                    extern bool gbUpdateSizes();
-                    gbUpdateSizes();
-                    gbReset();
-                }
-                gbReset();
-            }
-        } else if (type == IMAGE_GBA) {
-            int size = CPULoadRom(szFile);
-            failed = (size == 0);
-            if (!failed) {
-                if (cpuSaveType == 0)
-                    utilGBAFindSave(size);
-                else
-                    saveType = cpuSaveType;
-
-                sdlApplyPerImagePreferences();
-
-                doMirroring(mirroringEnable);
-
-                cartridgeType = 0;
-                emulator = GBASystem;
-
-                CPUInit(biosFileNameGBA, useBios);
-                int patchnum;
-                for (patchnum = 0; patchnum < patchNum; patchnum++) {
-                    fprintf(stdout, "Trying patch %s%s\n", patchNames[patchnum],
-                        applyPatch(patchNames[patchnum], &rom, &size) ? " [success]" : "");
-                }
-                CPUReset();
-            }
-        }
-
-        if (failed) {
-            systemMessage(0, "Failed to load file %s", szFile);
-            exit(-1);
-        }
-    } else {
-        soundInit();
-        cartridgeType = 0;
-        strcpy(filename, "gnu_stub");
-        rom = (uint8_t*)malloc(0x2000000);
-        workRAM = (uint8_t*)calloc(1, 0x40000);
-        bios = (uint8_t*)calloc(1, 0x4000);
-        internalRAM = (uint8_t*)calloc(1, 0x8000);
-        paletteRAM = (uint8_t*)calloc(1, 0x400);
-        vram = (uint8_t*)calloc(1, 0x20000);
-        oam = (uint8_t*)calloc(1, 0x400);
-        pix = (uint8_t*)calloc(1, 4 * 241 * 162);
-        ioMem = (uint8_t*)calloc(1, 0x400);
-
-        emulator = GBASystem;
-
-        CPUInit(biosFileNameGBA, useBios);
-        CPUReset();
+    if (type == IMAGE_UNKNOWN) {
+        systemMessage(0, "Unknown file type %s", gameDataFile);
+        exit(-1);
     }
+    cartridgeType = (int)type;
+
+    //if (type == IMAGE_GB) {
+    //    failed = !gbLoadRom(gameDataFile);
+    //    if (!failed) {
+    //        gbGetHardwareType();
+
+    //        // used for the handling of the gb Boot Rom
+    //        if (gbHardware & 7)
+    //            gbCPUInit(biosFileNameGB, useBios);
+
+    //        cartridgeType = IMAGE_GB;
+    //        emulator = GBSystem;
+    //        int size = gbRomSize, patchnum;
+    //        for (patchnum = 0; patchnum < patchNum; patchnum++) {
+    //            fprintf(stdout, "Trying patch %s%s\n", patchNames[patchnum],
+    //                applyPatch(patchNames[patchnum], &gbRom, &size) ? " [success]" : "");
+    //        }
+    //        if (size != gbRomSize) {
+    //            extern bool gbUpdateSizes();
+    //            gbUpdateSizes();
+    //            gbReset();
+    //        }
+    //        gbReset();
+    //    }
+    //} else if (type == IMAGE_GBA) {
+    if (type == IMAGE_GBA) {
+        failed = sdlLoadGameData(gameDataFile);
+    }
+
+    if (failed) {
+        systemMessage(0, "Failed to load file %s", gameDataFile);
+        Mod_Log("Failed to load file ");
+        Mod_Logln(gameDataFile);
+        exit(-1);
+    }
+    //} else {
+    //    soundInit();
+    //    cartridgeType = 0;
+    //    strcpy(filename, "gnu_stub");
+    //    rom = (uint8_t*)malloc(0x2000000);
+    //    workRAM = (uint8_t*)calloc(1, 0x40000);
+    //    bios = (uint8_t*)calloc(1, 0x4000);
+    //    internalRAM = (uint8_t*)calloc(1, 0x8000);
+    //    paletteRAM = (uint8_t*)calloc(1, 0x400);
+    //    vram = (uint8_t*)calloc(1, 0x20000);
+    //    oam = (uint8_t*)calloc(1, 0x400);
+    //    pix = (uint8_t*)calloc(1, 4 * 241 * 162);
+    //    ioMem = (uint8_t*)calloc(1, 0x400);
+
+    //    emulator = GBASystem;
+
+    //    CPUInit(biosFileNameGBA, useBios);
+    //    CPUReset();
+    //}
 
     sdlReadBattery();
 
@@ -1940,7 +2130,9 @@ int main(int argc, char** argv)
 
     sdlInitVideo();
 
-    filterFunction = initFilter(filter, systemColorDepth, sizeX);
+    //filterFunction = initFilter(filter, systemColorDepth, sizeX);
+    sdlSetFilter(filter);
+
     if (!filterFunction) {
         fprintf(stderr, "Unable to init filter '%s'\n", getFilterName(filter));
         exit(-1);
@@ -1993,7 +2185,14 @@ int main(int argc, char** argv)
         }
     }
 
+	Mod_Init(window, &glcontext);
+
     while (emulating) {
+        if (should_video_resize.should) {
+            sdlResizeVideo();
+            should_video_resize.should = false;
+        }
+
         if (!paused && active) {
             if (debugger && emulator.emuHasDebugger)
                 remoteStubMain();
@@ -2006,9 +2205,23 @@ int main(int argc, char** argv)
                 rewindSaveNeeded = false;
             }
         } else {
-            SDL_Delay(500);
+            //SDL_Delay(500);
+			// Originally, the emulator wouldn't draw the screen when emulation is paused.
+			// Since I'm developing a new pause menu, I need it to draw whether emulation is running or not.
+			// This seems to be a decent fix to the problem. For now.
+			systemDrawScreen();
+			//SDL_Delay(50);
+
         }
+
+
         sdlPollEvents();
+        if (should_update_fullscreen.should) {
+            sdlSetFullScreen(should_update_fullscreen.val);
+            should_update_fullscreen.should = false;
+        }
+
+		Mod_MainLoop();
 #if WITH_LIRC
         lircCheckInput();
 #endif
@@ -2054,7 +2267,17 @@ int main(int argc, char** argv)
     SaveConfigFile();
     CloseConfig();
     SDL_Quit();
+	Mod_OnExit();
     return 0;
+}
+
+bool ResetEmulation() {
+	if (emulating) {
+		emulator.emuReset();
+		return true;
+	}
+
+	return false;
 }
 
 void systemMessage(int num, const char* msg, ...)
@@ -2096,6 +2319,30 @@ void drawSpeed(uint8_t* screen, int pitch, int x, int y)
     drawText(screen, pitch, x, y, buffer, showSpeedTransparent);
 }
 
+
+// Added by Alex - used for storing texture coords for aspect ratio correction:
+
+
+
+// End of addition.
+
+
+// Added by Alex - Correcting aspect ratio for OpenGL:
+GLfloatRect getGLTextureCoords() {
+    GLfloatRect retVal;
+
+    retVal = {
+        {0.0f, 0.0f},
+        {destWidth / (GLfloat)textureSize, 0.0f},
+        {0.0f, destHeight / (GLfloat)textureSize},
+        {destWidth / (GLfloat)textureSize, destHeight / (GLfloat)textureSize}
+    };
+
+    return retVal;
+}
+
+// End of addition.
+
 void systemDrawScreen()
 {
     unsigned int destPitch = destWidth * (systemColorDepth >> 3);
@@ -2113,19 +2360,51 @@ void systemDrawScreen()
     if (ifbFunction)
         ifbFunction(pix + srcPitch, srcPitch, sizeX, sizeY);
 
+
+
+    if (openGL && !(paused || show_options)) {
+        int bytes = (systemColorDepth >> 3);
+        for (int i = 0; i < sizeX; i++)
+            for (int j = 0; j < sizeY + 1; j++) {
+                 //I think this is trying to switch the Alpha and Red bytes of the color... Not sure though...
+                uint8_t k;
+                k = pix[i * bytes + j * srcPitch + 3];
+                pix[i * bytes + j * srcPitch + 3] = pix[i * bytes + j * srcPitch + 1];
+                pix[i * bytes + j * srcPitch + 1] = k;
+
+                // wait... I don't think it's swapping it's colors correctly. let's experiment:
+
+               /* uint8_t old0 = filterPix[i * bytes + j * destPitch + 0];
+                uint8_t old1 = filterPix[i * bytes + j * destPitch + 1];
+                uint8_t old2 = filterPix[i * bytes + j * destPitch + 2];
+                uint8_t old3 = filterPix[i * bytes + j * destPitch + 3];
+
+                filterPix[i * bytes + j * destPitch + 0] = old0;
+                filterPix[i * bytes + j * destPitch + 1] = old0;
+                filterPix[i * bytes + j * destPitch + 2] = old0;
+                filterPix[i * bytes + j * destPitch + 3] = old0;*/
+
+            }
+    }
+
     filterFunction(pix + srcPitch, srcPitch, delta, screen,
         destPitch, sizeX, sizeY);
 
+
+    // This was an attempt to handle some color/byte-order correction for OpenGL after the game image had been processed by the filter.
+    //However, there was some color distortion in the results. I've determined that it's better to handle this correction BEFORE the image is filtered.
+    /*
     if (openGL) {
         int bytes = (systemColorDepth >> 3);
         for (int i = 0; i < destWidth; i++)
             for (int j = 0; j < destHeight; j++) {
+
                 uint8_t k;
                 k = filterPix[i * bytes + j * destPitch + 3];
                 filterPix[i * bytes + j * destPitch + 3] = filterPix[i * bytes + j * destPitch + 1];
                 filterPix[i * bytes + j * destPitch + 1] = k;
             }
-    }
+    }*/
 
     drawScreenMessage(screen, destPitch, 10, destHeight - 20, 3000);
 
@@ -2133,33 +2412,60 @@ void systemDrawScreen()
         drawSpeed(screen, destPitch, 10, 20);
 
     if (openGL) {
-        glClear(GL_COLOR_BUFFER_BIT);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, destWidth);
-        if (systemColorDepth == 16)
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, destWidth, destHeight,
-                GL_RGB, GL_UNSIGNED_SHORT_5_6_5, screen);
-        else
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, destWidth, destHeight,
-                //GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, screen);
-                GL_RGBA, GL_UNSIGNED_BYTE, screen);
 
-        glBegin(GL_TRIANGLE_STRIP);
-        glTexCoord2f(0.0f, 0.0f);
-        glVertex3i(0, 0, 0);
-        glTexCoord2f(destWidth / (GLfloat)textureSize, 0.0f);
-        glVertex3i(1, 0, 0);
-        glTexCoord2f(0.0f, destHeight / (GLfloat)textureSize);
-        glVertex3i(0, 1, 0);
-        glTexCoord2f(destWidth / (GLfloat)textureSize,
-            destHeight / (GLfloat)textureSize);
-        glVertex3i(1, 1, 0);
-        glEnd();
-        SDL_GL_SwapWindow(window);
+		//if (!paused) {
+
+        glRect = getGLTextureCoords();
+		glClear(GL_COLOR_BUFFER_BIT);
+		glPixelStorei(GL_UNPACK_ROW_LENGTH, destWidth);
+		if (systemColorDepth == 16)
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, destWidth, destHeight,
+				GL_RGB, GL_UNSIGNED_SHORT_5_6_5, screen);
+		else
+			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, destWidth, destHeight,
+				//GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, screen);
+				GL_RGBA, GL_UNSIGNED_BYTE, screen);
+
+		glBegin(GL_TRIANGLE_STRIP);
+		//glTexCoord2f(0.0f, 0.0f);
+		glTexCoord2f(glRect.top_left.x, glRect.top_left.y);
+		glVertex3i(0, 0, 0);
+		//glTexCoord2f(destWidth / (GLfloat)textureSize, 0.0f);
+		glTexCoord2f(glRect.top_right.x, glRect.top_right.y);
+		glVertex3i(1, 0, 0);
+		//glTexCoord2f(0.0f, destHeight / (GLfloat)textureSize);
+		glTexCoord2f(glRect.bottom_left.x, glRect.bottom_left.y);
+		glVertex3i(0, 1, 0);
+		//glTexCoord2f(destWidth / (GLfloat)textureSize, destHeight / (GLfloat)textureSize);
+		glTexCoord2f(glRect.bottom_right.x, glRect.bottom_right.y);
+		glVertex3i(1, 1, 0);
+
+
+
+		glEnd();
+		Mod_DrawDisplay(texture, surface, window, renderer);
+		SDL_GL_SwapWindow(window);
+
+		//}
+		//else {
+
+		//}
+
+
+
     } else {
         SDL_UnlockSurface(surface);
+
+		
+
         SDL_UpdateTexture(texture, NULL, surface->pixels, surface->pitch);
         SDL_RenderCopy(renderer, texture, NULL, NULL);
+
+		//Mod_DrawDisplay(texture, surface, window, renderer);
+
         SDL_RenderPresent(renderer);
+
+		//Mod_DrawDisplay(texture, surface, window, renderer);
     }
 }
 

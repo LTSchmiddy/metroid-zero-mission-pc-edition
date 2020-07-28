@@ -1,5 +1,6 @@
 #include <wx/log.h>
 #include "wx/keyedit.h"
+#include "wx/string.h"
 
 IMPLEMENT_DYNAMIC_CLASS(wxKeyTextCtrl, wxTextCtrl)
 

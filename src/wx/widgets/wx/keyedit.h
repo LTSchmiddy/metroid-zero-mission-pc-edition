@@ -8,6 +8,7 @@
 #include <vector>
 #include <wx/accel.h>
 #include <wx/textctrl.h>
+#include "wx/string.h"
 
 typedef std::vector<wxAcceleratorEntry> wxAcceleratorEntry_v;
 
