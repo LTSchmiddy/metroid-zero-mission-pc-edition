@@ -10,13 +10,13 @@
 #include "../../sdl/inputSDL.h"
 #include "../../common/ConfigManager.h"
 #include "../../common/Patch.h"
-#include "../../modscripts/python_scripting/python_integ.h"
 #include "OverlayMenu_Main.h"
 #include "ui/BaseComponent.h"
 #include "ui/components/OptionsMenuComponent.h"
 #include "ui/components/PauseMenuComponent.h"
 #include "ui/components/QuitMenu.h"
 #include "ui/components/InputOptionWidget.h"
+#include "ui/components/MenuOptionInfo.h"
 #include "Player.h"
 
 #include "imgui.h"
@@ -60,8 +60,6 @@ ImVec2 menuPadding = ImVec2(30, 30);
 bool show_options;
 bool show_quit;
 
-//MemAddrRef<uint8_t> gamemode;
-
 //MemAddrRef<uint8_t> gamemode = MemAddrRef<uint8_t>(GamemodeAddress, MemAddrRefSize::SingleByte);
 
 // Runtime Vars:
@@ -92,7 +90,7 @@ void PauseMenu_Init(SDL_Window* window, SDL_GLContext* gl_context) {
 	menuFont = io->Fonts->AddFontFromFileTTF("./assets/ui/SerpentineDBol.ttf", Mod_menuFontSize);
 	io->Fonts->Build();
 	io->FontDefault = menuFont;
-
+	
 
 	// Setup Platform/Renderer bindings
 	ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
@@ -153,9 +151,40 @@ void PauseMenu_OnFocusLost() {
 	Mod_Logln("Focus Lost");
 }
 
+// Modifying the key events passed to IMGUI, so that it recognizes the control inputs as valid menu navigation.
+// There's probably a better way to do this. I'm just not about to look right now.
 
+// imgui seems to use the arrow keys for nav and space for confirm...
+
+//SDL_Event imguiSDLKeyEventMutator(const SDL_Event& event) {
+//	
+//	// Clones the event, since we don't want to alter the original:
+//	SDL_Event retVal;
+//	memcpy(&retVal, &event, sizeof(SDL_Event));
+//
+//	// Running Keycode Modifying 
+//	if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+//		// Allow using game controls:
+//		if (event.key.keysym.sym == menu_options.input.up.value) { retVal.key.keysym.sym = SDLK_UP; }
+//		else if (event.key.keysym.sym == menu_options.input.down.value) { retVal.key.keysym.sym = SDLK_DOWN; }
+//		else if (event.key.keysym.sym == menu_options.input.left.value) { retVal.key.keysym.sym = SDLK_LEFT; }
+//		else if (event.key.keysym.sym == menu_options.input.right.value) { retVal.key.keysym.sym = SDLK_RIGHT; }
+//		else if (event.key.keysym.sym == menu_options.input.jump.value) { retVal.key.keysym.sym = SDLK_SPACE; }
+//
+//		// Allowing Enter key for confirm:
+//		else if (event.key.keysym.sym == SDLK_RETURN) { 
+//			retVal.key.keysym.sym = SDLK_SPACE; 
+//			systemScreenMessage("Mutating ENTER!");
+//		}
+//	}
+//
+//	return retVal;
+//}
 
 void PauseMenu_handleSDLEvent(const SDL_Event& event) {
+
+	//SDL_Event mutated_event = imguiSDLKeyEventMutator(event);
+	//ImGui_ImplSDL2_ProcessEvent(&mutated_event);
 	ImGui_ImplSDL2_ProcessEvent(&event);
 }
 

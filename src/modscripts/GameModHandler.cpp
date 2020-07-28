@@ -93,6 +93,18 @@ SDL_version linked;
 //SDL_Surface pauseSurface;
 //SDL_Texture pauseTexture;
 
+struct MenuKeys {
+	bool up;
+	bool down;
+	bool left;
+	bool right;
+	bool enter;
+	bool backspace;
+	bool escape;
+
+} menu_keys;
+
+
 GameMode getGameMode() {
 	return (GameMode)gamemode.get();
 }
@@ -164,6 +176,12 @@ void Mod_MainLoop() {
 	PauseMenu_MainLoop();
 
 	//if (CPUReadByte(GamemodeAddress) != 04) {
+
+	if (gamemode.get() == GameMode::File_select) {
+		systemScreenMessage("ESC: Options / Quit Game");
+		return;
+	}
+
 	if (gamemode.get() != GameMode::In_game) {
 		return;
 	}
@@ -178,6 +196,34 @@ void Mod_MainLoop() {
 	}
 }
 
+
+void updateTrackedKey(const SDL_Event& event, SDL_Keycode keycode, bool* valueRef) {
+	if (event.key.keysym.sym == keycode) {
+		if (event.type == SDL_KEYDOWN) {
+			*valueRef = true;
+		}
+
+		if (event.type == SDL_KEYUP) {
+			*valueRef = false;
+		}
+	}
+
+}
+
+void updateTrackedKey(const SDL_Event& event, tracked_key* key) {
+	updateTrackedKey(event, key->key, &key->pressed);
+}
+
+//if (event.key.keysym.sym == key->key) {
+//	if (event.type == SDL_KEYDOWN) {
+//		key->pressed = true;
+//	}
+
+//	if (event.type == SDL_KEYUP) {
+//		key->pressed = false;
+//	}
+//}
+
 void Mod_handleSDLEvent(const SDL_Event& event) {
 	PauseMenu_handleSDLEvent(event);
 }
@@ -185,16 +231,35 @@ void Mod_handleSDLEvent(const SDL_Event& event) {
 void Mod_handleInputSDLEvent(const SDL_Event& event) {
 	PauseMenu_handleInputSDLEvent(event);
 
-	if (event.key.keysym.sym == tkeys.quick_morphball.key) {
-		if (event.type == SDL_KEYDOWN) {
-			tkeys.quick_morphball.pressed = true;
-		}
+	// Handle Quick Morphball:
+	updateTrackedKey(event, tkeys.quick_morphball.key, &tkeys.quick_morphball.pressed);
 
-		if (event.type == SDL_KEYUP) {
-			tkeys.quick_morphball.pressed = false;
-		}
+
+	// Handle Menu Keys:
+	updateTrackedKey(event, SDLK_UP, &menu_keys.up);
+	updateTrackedKey(event, SDLK_DOWN, &menu_keys.down);
+	updateTrackedKey(event, SDLK_LEFT, &menu_keys.left);
+	updateTrackedKey(event, SDLK_RIGHT, &menu_keys.right);
+	updateTrackedKey(event, SDLK_RETURN, &menu_keys.enter);
+	updateTrackedKey(event, SDLK_BACKSPACE, &menu_keys.backspace);
+	updateTrackedKey(event, SDLK_ESCAPE, &menu_keys.escape);
+
+	// Update Showing Options/Pause menu
+	if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+		PauseMenu_Toggle();
 	}
+
 }
+
+//if (event.key.keysym.sym == tkeys.quick_morphball.key) {
+//	if (event.type == SDL_KEYDOWN) {
+//		tkeys.quick_morphball.pressed = true;
+//	}
+//
+//	if (event.type == SDL_KEYUP) {
+//		tkeys.quick_morphball.pressed = false;
+//	}
+//}
 
 bool Mod_HandleInput(int which, int button, bool pressed) {
 	return Mod_HandleInput((EPad)which, (EKey)button, pressed);
@@ -210,8 +275,26 @@ bool Mod_HandleInput(EPad which, EKey button, bool pressed) {
 		return false;
 	}
 
-	//if (CPUReadByte(GamemodeAddress) != 04) {
+
+	// If were not ingame, we're going to enable the menu control buttons
 	if (gamemode.get() != GameMode::In_game) {
+		
+		if (button == EKey::KEY_UP) { return menu_keys.up || pressed; }
+		if (button == EKey::KEY_DOWN) { return menu_keys.down || pressed; }
+		if (button == EKey::KEY_LEFT) { return menu_keys.left || pressed; }
+		if (button == EKey::KEY_RIGHT) { return menu_keys.right || pressed; }
+		if (button == EKey::KEY_BUTTON_A) { return menu_keys.enter || pressed; }
+		if (button == EKey::KEY_BUTTON_B) { return menu_keys.backspace || pressed; }
+		if (button == EKey::KEY_BUTTON_START) {
+			return (
+				menu_keys.escape && (
+					gamemode.get() == GameMode::Intro || 
+					gamemode.get() == GameMode::Title || 
+					gamemode.get() == GameMode::Credits
+				)
+			) || pressed; 
+		}
+
 		return pressed;
 	}
 
